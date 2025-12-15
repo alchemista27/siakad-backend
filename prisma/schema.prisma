@@ -1,0 +1,189 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum Semester {
+  GANJIL
+  GENAP
+}
+
+// Models
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+
+  // Relasi (Optional, tergantung role)
+  teacherProfile Teacher?
+  studentProfile Student?
+
+  @@map("users")
+}
+
+model Teacher {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique
+  nip       String? @unique
+  fullName  String
+  isActive  Boolean @default(true)
+  
+  user      User    @relation(fields: [userId], references: [id])
+  
+  // Relasi: Guru bisa menjadi Wali Kelas di banyak kelas (beda tahun)
+  homeroomClasses Class[] 
+  // Relasi: Guru mengajar banyak mapel di banyak kelas
+  assignments     TeachingAssignment[]
+
+  @@map("teachers")
+}
+
+model Student {
+  id          Int     @id @default(autoincrement())
+  userId      Int     @unique
+  nis         String  @unique
+  nisn        String?
+  fullName    String
+  address     String?
+  parentPhone String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  // History kelas siswa
+  studentClasses StudentClass[]
+  // Nilai-nilai siswa
+  grades         Grade[]
+  // Data rapor (absensi/catatan)
+  reportCards    ReportCard[]
+
+  @@map("students")
+}
+
+model AcademicYear {
+  id        Int      @id @default(autoincrement())
+  name      String   // Contoh: "2024/2025"
+  semester  Semester
+  isActive  Boolean  @default(false)
+  startDate DateTime?
+  endDate   DateTime?
+
+  classes Class[]
+
+  @@map("academic_years")
+}
+
+model Class {
+  id                Int @id @default(autoincrement())
+  academicYearId    Int
+  homeroomTeacherId Int
+  name              String // Contoh: "X-IPA-1"
+  level             Int    // 10, 11, 12
+
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  homeroomTeacher Teacher      @relation(fields: [homeroomTeacherId], references: [id])
+
+  students      StudentClass[]
+  assignments   TeachingAssignment[]
+  reportCards   ReportCard[]
+
+  @@map("classes")
+}
+
+model StudentClass {
+  id        Int @id @default(autoincrement())
+  classId   Int
+  studentId Int
+
+  class   Class   @relation(fields: [classId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([classId, studentId]) // Satu siswa cuma boleh masuk 1x di kelas yg sama
+  @@map("student_classes")
+}
+
+model Subject {
+  id   Int    @id @default(autoincrement())
+  code String @unique
+  name String
+
+  assignments TeachingAssignment[]
+
+  @@map("subjects")
+}
+
+model TeachingAssignment {
+  id        Int @id @default(autoincrement())
+  classId   Int
+  subjectId Int
+  teacherId Int
+  kkm       Int @default(75)
+
+  class   Class   @relation(fields: [classId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+
+  assessments Assessment[]
+
+  @@map("teaching_assignments")
+}
+
+model Assessment {
+  id                   Int     @id @default(autoincrement())
+  teachingAssignmentId Int
+  name                 String  // "UH1", "UTS"
+  weightPercentage     Float   // Bobot %
+
+  assignment TeachingAssignment @relation(fields: [teachingAssignmentId], references: [id])
+  grades     Grade[]
+
+  @@map("assessments")
+}
+
+model Grade {
+  id           Int   @id @default(autoincrement())
+  assessmentId Int
+  studentId    Int
+  score        Float
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  student    Student    @relation(fields: [studentId], references: [id])
+
+  @@map("grades")
+}
+
+model ReportCard {
+  id          Int     @id @default(autoincrement())
+  classId     Int
+  studentId   Int
+  sickCount   Int     @default(0)
+  permitCount Int     @default(0)
+  alphaCount  Int     @default(0)
+  teacherNote String? @db.Text
+  isPublished Boolean @default(false)
+
+  class   Class   @relation(fields: [classId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@map("report_cards")
+}
