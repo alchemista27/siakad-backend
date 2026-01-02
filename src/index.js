@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoute = require('./routes/authRoute');
-const teacerRoutes = require('./routes/teacherRoutes');
+const teacherRoutes = require('./routes/teacherRoutes');
 
 dotenv.config();
 const app = express();
@@ -15,7 +15,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoute);
-app.use('/api/teachers', teacerRoutes);
+app.use('/api/teachers', teacherRoutes);
+// Alias singular route to support frontend using /api/teacher
+app.use('/api/teacher', teacherRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;

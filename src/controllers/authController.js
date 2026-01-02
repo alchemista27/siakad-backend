@@ -3,7 +3,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
-const SECRET_KEY = process.env.JWT_SECRET || 'rahasia_perusahaan'; // nanti pindahkan ke .env
+// Gunakan nama variabel dan fallback yang konsisten dengan middleware untuk menghindari error token
+const SECRET_KEY = process.env.JWT_SECRET || process.env.SECRET_KEY || 'rahasia';
 
 const login = async (req, res) => {
     const { username, password } = req.body;
