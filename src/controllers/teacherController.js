@@ -47,4 +47,70 @@ const getMyClasses = async (req, res) => {
     }
 };
 
-module.exports = { getMyClasses };
+// Ambil detail satu kelas ajar, termasuk daftar siswa & penilaiannya
+const getAssignmentDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const assignmentId = parseInt(id);
+
+        const assignment = await prisma.teachingAssignment.findUnique({
+            where: { id: assignmentId },
+            include: {
+                class: {
+                    include: {
+                        // Ambil daftar siswa di kelas ini
+                        students: {
+                            include: {
+                                student: true // Ambil detail profil siswa
+                            }
+                        }
+                    }
+                },
+                subject: true,
+                // Ambil daftar penilaian yang sudah dibuat untuk kelas ajar ini
+                assessments: {
+                    include: {
+                        // Ambil nilai yang sudah ada untuk setiap penilaian
+                        grades: true
+                    }
+                }
+            }
+        });
+
+        if (!assignment) {
+            return res.status(404).json({ error: 'Kelas ajar tidak ditemukan.' });
+        }
+
+        res.json(assignment);
+    } catch (error) {
+        console.error("Error mengambil detail kelas ajar:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Buat penilaian baru untuk sebuah kelas ajar
+const createAssessment = async (req, res) => {
+    try {
+        const { teachingAssignmentId, name, weightPercentage } = req.body;
+
+        if (!teachingAssignmentId || !name) {
+            return res.status(400).json({ error: 'ID Kelas Ajar dan Nama Penilaian harus diisi.' });
+        }
+
+        const newAssessment = await prisma.assessment.create({
+            data: {
+                teachingAssignmentId: parseInt(teachingAssignmentId),
+                name: name,
+                // Bobot bisa opsional, default ke 0 jika tidak disediakan
+                weightPercentage: weightPercentage ? parseFloat(weightPercentage) : 0,
+            },
+        });
+
+        res.status(201).json(newAssessment);
+    } catch (error) {
+        console.error("Error membuat penilaian:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { getMyClasses, getAssignmentDetails, createAssessment };
