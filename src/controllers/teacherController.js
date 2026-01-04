@@ -267,4 +267,85 @@ const bulkUpdateGrades = async (req, res) => {
     }
 };
 
-module.exports = { getMyClasses, getAssignmentDetails, createAssessment, getAssignmentSummary, deleteAssessment, bulkUpdateGrades };
+const getStudentReportDetails = async (req, res) => {
+    const { assignmentId, studentId } = req.params;
+    const teacherId = req.user.profileId;
+
+    try {
+        // 1. Otorisasi: Pastikan guru yang login berhak mengakses kelas ajar ini
+        const assignment = await prisma.teachingAssignment.findFirst({
+            where: {
+                id: parseInt(assignmentId),
+                teacherId: teacherId,
+            },
+            include: {
+                class: true,
+                subject: true,
+                assessments: {
+                    orderBy: {
+                        id: 'asc' // Urutkan penilaian berdasarkan ID, yang mencerminkan urutan pembuatan
+                    }
+                }
+            }
+        });
+
+        if (!assignment) {
+            return res.status(403).json({ message: 'Anda tidak memiliki izin untuk mengakses laporan ini.' });
+        }
+
+        // 2. Ambil data siswa
+        const student = await prisma.student.findUnique({
+            where: { id: parseInt(studentId) }
+        });
+
+        if (!student) {
+            return res.status(404).json({ message: 'Data siswa tidak ditemukan.' });
+        }
+
+        // 3. Ambil semua nilai siswa untuk setiap penilaian di kelas ajar ini
+        const assessmentIds = assignment.assessments.map(a => a.id);
+        const gradesData = await prisma.grade.findMany({
+            where: {
+                studentId: parseInt(studentId),
+                assessmentId: { in: assessmentIds }
+            }
+        });
+
+        // Buat map untuk akses nilai yang mudah: { assessmentId: score }
+        const gradesMap = new Map(gradesData.map(g => [g.assessmentId, g.score]));
+
+        // Gabungkan data penilaian dengan nilainya
+        const gradesReport = assignment.assessments.map(assessment => ({
+            assessmentName: assessment.name,
+            score: gradesMap.get(assessment.id) ?? null // Jika siswa belum dinilai, nilainya null
+        }));
+
+        // 4. Hitung rata-rata
+        const validScores = gradesData.map(g => g.score).filter(s => s !== null);
+        const averageScore = validScores.length > 0
+            ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
+            : 0;
+
+        // 5. Susun payload respons
+        const responsePayload = {
+            student: { fullName: student.fullName, nis: student.nis },
+            assignment: {
+                subjectName: assignment.subject.name,
+                className: assignment.class.name,
+                kkm: assignment.kkm
+            },
+            grades: gradesReport,
+            summary: {
+                averageScore: averageScore,
+                isPassing: averageScore >= assignment.kkm
+            }
+        };
+
+        res.json(responsePayload);
+    } catch (error) {
+        console.error("Error fetching student report:", error);
+        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    }
+};
+
+module.exports = { getMyClasses, getAssignmentDetails, createAssessment, getAssignmentSummary, deleteAssessment, bulkUpdateGrades, getStudentReportDetails };
